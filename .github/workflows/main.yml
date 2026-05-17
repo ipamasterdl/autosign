@@ -1,0 +1,104 @@
+name: Auto SSL and Sign Mobileconfig
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'khoindvn.io.vn.mobileconfig'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 1 */2 *' # Chạy mỗi 2 tháng để gia hạn SSL
+
+jobs:
+  sign-mobileconfig:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install acme.sh
+        run: |
+          curl https://get.acme.sh | sh
+          echo "$HOME/.acme.sh" >> $GITHUB_PATH
+
+      - name: Issue SSL Certificate (Sử dụng Cloudflare DNS)
+        env:
+          CF_Token: ${{ secrets.CF_TOKEN }}
+          CF_Account_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          DOMAIN: ${{ secrets.DOMAIN_NAME }}
+        run: |
+          # Đăng ký tài khoản acme.sh với email (cần thiết cho Let's Encrypt)
+          acme.sh --register-account -m admin@$DOMAIN --server letsencrypt
+          
+          # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
+          acme.sh --issue --dns dns_cf -d $DOMAIN --server letsencrypt
+
+      - name: Export Certificates
+        env:
+          DOMAIN: ${{ secrets.DOMAIN_NAME }}
+        run: |
+          acme.sh --install-cert -d $DOMAIN \
+            --cert-file ./cert.pem \
+            --key-file ./key.pem \
+            --ca-file ./ca.pem \
+            --fullchain-file ./fullchain.pem
+
+      - name: Sign mobileconfig file
+        run: |
+          if [ -f "khoindvn.io.vn.mobileconfig" ]; then
+            echo "Đang sign file mobileconfig..."
+            openssl smime -sign \
+              -signer ./cert.pem \
+              -inkey ./key.pem \
+              -certfile ./fullchain.pem \
+              -nodetach \
+              -outform der \
+              -in khoindvn.io.vn.mobileconfig \
+              -out khoindvn.io.vn_signed.mobileconfig
+          else
+            echo "Không tìm thấy file khoindvn.io.vn.mobileconfig"
+            exit 1
+          fi
+
+      - name: Upload Signed Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-mobileconfig
+          path: khoindvn.io.vn_signed.mobileconfig
+
+      - name: Commit and Push Signed File
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add khoindvn.io.vn_signed.mobileconfig
+          # Chỉ commit nếu có sự thay đổi
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto update signed mobileconfig" && git push)
+
+      - name: Zip Files and Send to Telegram Bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -f "khoindvn.io.vn_signed.mobileconfig" ]; then
+            echo "Đang nén các file thành ZIP..."
+            zip khoindvn.io.vn_SSL_and_Profile.zip khoindvn.io.vn_signed.mobileconfig cert.pem key.pem fullchain.pem ca.pem
+            
+            # Tạo nội dung tin nhắn có chứa link tải file tĩnh (tự động cập nhật)
+            CAPTION="✅ Đã gia hạn SSL và ký Profile thành công!
+            
+🔗 Link tải trực tiếp Profile (Luôn cập nhật bản mới nhất):
+https://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.io.vn_signed.mobileconfig
+
+📦 Kèm theo là file ZIP chứa Profile đã ký và bộ chứng chỉ SSL (cert, key, fullchain)."
+
+            echo "Đang gửi qua Telegram..."
+            curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \
+                 -F caption="$CAPTION" \
+                 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument?chat_id=${TELEGRAM_CHAT_ID}"
+          else
+            echo "Lỗi: Không tìm thấy file khoindvn.io.vn_signed.mobileconfig để gửi qua Telegram."
+            exit 1
+          fi

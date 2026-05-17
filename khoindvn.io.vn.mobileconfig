@@ -52,13 +52,13 @@
 			<key>PayloadDisplayName</key>
 			<string>Anti Revoke</string>
 			<key>PayloadIdentifier</key>
-			<string>com.apple.dnsSettings.managed.79203420-8e41-4ecf-9a31-55125c24dfe1</string>
+			<string>com.apple.dnsSettings.managed.93c6d99f-011a-4f91-96d6-db38ab34b55b</string>
 			<key>PayloadOrganization</key>
 			<string>khơindvn</string>
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
-		<string>3D876545-3650-44EF-AB42-60DF5A7F4989</string>
+		<string>2D1F3329-9100-40CA-BDD2-9587CC5A7147</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -197,13 +197,13 @@
 			<key>PayloadDisplayName</key>
 			<string>Bio Khoindvn</string>
 			<key>PayloadIdentifier</key>
-			<string>com.apple.webClip.managed.B725C86E-784F-41DC-9FA3-8F0455A35B85</string>
+			<string>com.apple.webClip.managed.30C6BD45-5E81-46D0-88E9-47BB15A7C63B</string>
 			<key>PayloadOrganization</key>
 			<string>khoindvn</string>
 			<key>PayloadType</key>
 			<string>com.apple.webClip.managed</string>
 			<key>PayloadUUID</key>
-		<string>EC4BE611-A285-4D1F-B9B4-82A4A8E092F9</string>
+		<string>FA483AAF-7323-459F-8F1D-5F15A7B46780</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>Precomposed</key>
@@ -223,7 +223,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.applicationaccess</string>
 			<key>PayloadUUID</key>
-		<string>3BDBBD11-9729-4C2D-839B-CCE7D11FDECA</string>
+		<string>887AFAD1-3756-4CD9-9328-8A46FCFB4235</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -235,7 +235,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-		<string>89547A5E-808A-4CA3-BB56-74D88DED8891</string>
+		<string>785EB2F9-34B7-47E2-93E9-563D4FBACCB4</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

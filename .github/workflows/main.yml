@@ -7,6 +7,11 @@ on:
     paths:
       - 'khoindvn.io.vn.mobileconfig'
   workflow_dispatch:
+    inputs:
+      mobileconfig_content:
+        description: 'Nội dung file mobileconfig gốc gửi từ Telegram'
+        required: false
+        default: ''
 
 jobs:
   sign-mobileconfig:
@@ -16,6 +21,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write mobileconfig content from input if provided
+        run: |
+          if [ -n "${{ github.event.inputs.mobileconfig_content }}" ]; then
+            echo "${{ github.event.inputs.mobileconfig_content }}" > khoindvn.io.vn.mobileconfig
+            echo "Đã ghi nhận file mobileconfig từ Telegram input. Sẽ không commit lên GitHub."
+          fi
 
       - name: Install acme.sh
         run: |
@@ -28,43 +40,28 @@ jobs:
           CF_Account_ID: ${{ secrets.CF_ACCOUNT_ID }}
           DOMAIN: ${{ secrets.DOMAIN_NAME }}
         run: |
-          # Đăng ký tài khoản acme.sh với email (cần thiết cho ZeroSSL)
-          acme.sh --register-account -m admin@$DOMAIN --server zerossl
-          
-          # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
-          acme.sh --issue --dns dns_cf -d $DOMAIN --server zerossl
+          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
+            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước cấp phát tự động."
+          else
+            # Đăng ký tài khoản acme.sh với email (cần thiết cho ZeroSSL)
+            acme.sh --register-account -m admin@$DOMAIN --server zerossl
+            # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
+            acme.sh --issue --dns dns_cf -d $DOMAIN --server zerossl
+          fi
 
       - name: Export Certificates
         env:
           DOMAIN: ${{ secrets.DOMAIN_NAME }}
         run: |
-          acme.sh --install-cert -d $DOMAIN \
-            --cert-file ./cert.pem \
-            --key-file ./key.pem \
-            --ca-file ./ca.pem \
-            --fullchain-file ./fullchain.pem
-
-      - name: Update PayloadUUID in mobileconfig
-        run: |
-          python3 -c "
-          import re, uuid
-          filepath = 'khoindvn.io.vn.mobileconfig'
-          with open(filepath, 'r', encoding='utf-8') as f:
-              content = f.read()
-          
-          pattern = r'(<key>PayloadUUID</key>\s*<string>)([^<]+)(</string>)'
-          
-          def repl(m):
-              new_uuid = str(uuid.uuid4())
-              if m.group(2).isupper():
-                  new_uuid = new_uuid.upper()
-              print(f'Replacing {m.group(2)} -> {new_uuid}')
-              return m.group(1) + new_uuid + m.group(3)
-              
-          new_content = re.sub(pattern, repl, content)
-          with open(filepath, 'w', encoding='utf-8') as f:
-              f.write(new_content)
-          "
+          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
+            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước xuất chứng chỉ."
+          else
+            acme.sh --install-cert -d $DOMAIN \
+              --cert-file ./cert.pem \
+              --key-file ./key.pem \
+              --ca-file ./ca.pem \
+              --fullchain-file ./fullchain.pem
+          fi
 
       - name: Sign mobileconfig file
         run: |
@@ -90,6 +87,7 @@ jobs:
           path: khoindvn.mobileconfig
 
       - name: Commit and Push Signed File
+        if: ${{ github.event.inputs.mobileconfig_content == '' || github.event.inputs.mobileconfig_content == null }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"

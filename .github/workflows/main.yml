@@ -24,6 +24,10 @@ on:
         description: 'Nội dung file ca.pem gửi từ Telegram'
         required: false
         default: ''
+      fullchain_content:
+        description: 'Nội dung file fullchain.pem gửi từ Telegram'
+        required: false
+        default: ''
 
 jobs:
   sign-mobileconfig:
@@ -51,6 +55,10 @@ jobs:
           if [ -n "${{ github.event.inputs.ca_content }}" ]; then
             echo "${{ github.event.inputs.ca_content }}" > ca.pem
             echo "Đã ghi nhận file ca.pem từ Telegram input. Sẽ không commit lên GitHub."
+          fi
+          if [ -n "${{ github.event.inputs.fullchain_content }}" ]; then
+            echo "${{ github.event.inputs.fullchain_content }}" > fullchain.pem
+            echo "Đã ghi nhận file fullchain.pem từ Telegram input. Sẽ không commit lên GitHub."
           fi
 
       - name: Install acme.sh

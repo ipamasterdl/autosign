@@ -83,14 +83,24 @@ jobs:
         run: |
           if [ -f "khoindvn.io.vn.mobileconfig" ]; then
             echo "Đang sign file mobileconfig..."
-            openssl smime -sign \
-              -signer ./cert.pem \
-              -inkey ./key.pem \
-              -certfile ./ca.pem \
-              -nodetach \
-              -outform der \
-              -in khoindvn.io.vn.mobileconfig \
-              -out khoindvn.mobileconfig
+            if [ -f "./ca.pem" ]; then
+              openssl smime -sign \
+                -signer ./cert.pem \
+                -inkey ./key.pem \
+                -certfile ./ca.pem \
+                -nodetach \
+                -outform der \
+                -in khoindvn.io.vn.mobileconfig \
+                -out khoindvn.mobileconfig
+            else
+              openssl smime -sign \
+                -signer ./cert.pem \
+                -inkey ./key.pem \
+                -nodetach \
+                -outform der \
+                -in khoindvn.io.vn.mobileconfig \
+                -out khoindvn.mobileconfig
+            fi
           else
             echo "Không tìm thấy file khoindvn.io.vn.mobileconfig"
             exit 1

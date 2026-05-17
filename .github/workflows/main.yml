@@ -87,12 +87,7 @@ jobs:
             zip khoindvn.io.vn_SSL_and_Profile.zip khoindvn.io.vn_signed.mobileconfig cert.pem key.pem fullchain.pem ca.pem
             
             # Tạo nội dung tin nhắn có chứa link tải file tĩnh (tự động cập nhật)
-            CAPTION="✅ Đã gia hạn SSL và ký Profile thành công!
-            
-🔗 Link tải trực tiếp Profile (Luôn cập nhật bản mới nhất):
-https://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.io.vn_signed.mobileconfig
-
-📦 Kèm theo là file ZIP chứa Profile đã ký và bộ chứng chỉ SSL (cert, key, fullchain)."
+            CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp Profile (Luôn cập nhật bản mới nhất):\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.io.vn_signed.mobileconfig\n\n📦 Kèm theo là file ZIP chứa Profile đã ký và bộ chứng chỉ SSL (cert, key, fullchain).'
 
             echo "Đang gửi qua Telegram..."
             curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \

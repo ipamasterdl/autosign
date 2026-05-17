@@ -58,7 +58,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
-			<string>1ffa9b02-1ad9-47c1-b7f6-a4a39e2d12b4</string>
+			<string>1fbed438-3a71-44e8-a7b6-31302f861214</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -203,7 +203,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.webClip.managed</string>
 			<key>PayloadUUID</key>
-			<string>36161A0B-0A6B-4E93-B226-002B888CA836</string>
+			<string>F296F50D-0CA7-46B4-86B5-86D99BEB09DD</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>Precomposed</key>
@@ -223,7 +223,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.applicationaccess</string>
 			<key>PayloadUUID</key>
-			<string>B77ED5B0-BDD5-4BBB-9C9F-A8D4F0CC513D</string>
+			<string>A4A603CB-4B25-4672-AC7F-1A9A241550C2</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -235,7 +235,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>3fbdf27d-4098-4cf6-a186-ed7ea5542373</string>
+	<string>ebc83761-77c1-47ec-ae97-be89e0c590bc</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

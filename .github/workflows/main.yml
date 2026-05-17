@@ -7,8 +7,6 @@ on:
     paths:
       - 'khoindvn.io.vn.mobileconfig'
   workflow_dispatch:
-   schedule:
-    - cron: '33 15 17 5 *' # Chạy vào lúc 15:33 UTC (tức 22:33 Việt Nam) ngày 17 tháng 5
 
 jobs:
   sign-mobileconfig:

@@ -53,7 +53,7 @@ jobs:
             openssl smime -sign \
               -signer ./cert.pem \
               -inkey ./key.pem \
-              -certfile ./fullchain.pem \
+              -certfile ./ca.pem \
               -nodetach \
               -outform der \
               -in khoindvn.io.vn.mobileconfig \

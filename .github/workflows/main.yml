@@ -12,6 +12,14 @@ on:
         description: 'Nội dung file mobileconfig gốc gửi từ Telegram'
         required: false
         default: ''
+      cert_content:
+        description: 'Nội dung file cert.pem gửi từ Telegram'
+        required: false
+        default: ''
+      key_content:
+        description: 'Nội dung file key.pem gửi từ Telegram'
+        required: false
+        default: ''
 
 jobs:
   sign-mobileconfig:
@@ -22,11 +30,19 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Write mobileconfig content from input if provided
+      - name: Write mobileconfig and SSL content from inputs if provided
         run: |
           if [ -n "${{ github.event.inputs.mobileconfig_content }}" ]; then
             echo "${{ github.event.inputs.mobileconfig_content }}" > khoindvn.io.vn.mobileconfig
             echo "Đã ghi nhận file mobileconfig từ Telegram input. Sẽ không commit lên GitHub."
+          fi
+          if [ -n "${{ github.event.inputs.cert_content }}" ]; then
+            echo "${{ github.event.inputs.cert_content }}" > cert.pem
+            echo "Đã ghi nhận file cert.pem từ Telegram input. Sẽ không commit lên GitHub."
+          fi
+          if [ -n "${{ github.event.inputs.key_content }}" ]; then
+            echo "${{ github.event.inputs.key_content }}" > key.pem
+            echo "Đã ghi nhận file key.pem từ Telegram input. Sẽ không commit lên GitHub."
           fi
 
       - name: Install acme.sh

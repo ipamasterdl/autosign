@@ -1,160 +1,394 @@
-name: Auto SSL and Sign Mobileconfig
+// Map toàn cục lưu trạng thái cuộc trò chuyện của người dùng (trong bộ nhớ tạm Worker)
+const userStates = new Map();
 
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'khoindvn.io.vn.mobileconfig'
-  workflow_dispatch:
-    inputs:
-      mobileconfig_content:
-        description: 'Nội dung file mobileconfig gốc gửi từ Telegram'
-        required: false
-        default: ''
-      cert_content:
-        description: 'Nội dung file cert.pem gửi từ Telegram'
-        required: false
-        default: ''
-      key_content:
-        description: 'Nội dung file key.pem gửi từ Telegram'
-        required: false
-        default: ''
-      ca_content:
-        description: 'Nội dung file ca.pem gửi từ Telegram'
-        required: false
-        default: ''
-      fullchain_content:
-        description: 'Nội dung file fullchain.pem gửi từ Telegram'
-        required: false
-        default: ''
+export default {
+  async fetch(request, env) {
+    if (request.method !== "POST") {
+      return new Response("Hello! This is a Telegram Bot Webhook for GitHub Actions.", { status: 200 });
+    }
 
-jobs:
-  sign-mobileconfig:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    try {
+      const update = await request.json();
 
-      - name: Write mobileconfig and SSL content from inputs if provided
-        run: |
-          if [ -n "${{ github.event.inputs.mobileconfig_content }}" ]; then
-            echo "${{ github.event.inputs.mobileconfig_content }}" > khoindvn.io.vn.mobileconfig
-            echo "Đã ghi nhận file mobileconfig từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.cert_content }}" ]; then
-            echo "${{ github.event.inputs.cert_content }}" > cert.pem
-            echo "Đã ghi nhận file cert.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.key_content }}" ]; then
-            echo "${{ github.event.inputs.key_content }}" > key.pem
-            echo "Đã ghi nhận file key.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.ca_content }}" ]; then
-            echo "${{ github.event.inputs.ca_content }}" > ca.pem
-            echo "Đã ghi nhận file ca.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.fullchain_content }}" ]; then
-            echo "${{ github.event.inputs.fullchain_content }}" > fullchain.pem
-            echo "Đã ghi nhận file fullchain.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
+      if (update.message) {
+        const chatId = update.message.chat.id;
 
-      - name: Install acme.sh
-        run: |
-          curl https://get.acme.sh | sh
-          echo "$HOME/.acme.sh" >> $GITHUB_PATH
+        // Bảo mật: Chỉ cho phép ADMIN_CHAT_ID (là bạn) gọi lệnh này
+        if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+          return new Response("Unauthorized", { status: 403 });
+        }
 
-      - name: Issue SSL Certificate (Sử dụng Cloudflare DNS)
-        env:
-          CF_Token: ${{ secrets.CF_TOKEN }}
-          CF_Account_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          DOMAIN: ${{ secrets.DOMAIN_NAME }}
-        run: |
-          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
-            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước cấp phát tự động."
-          else
-            # Đăng ký tài khoản acme.sh với email (cần thiết cho ZeroSSL)
-            acme.sh --register-account -m admin@$DOMAIN --server zerossl
-            # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
-            acme.sh --issue --dns dns_cf -d $DOMAIN --server zerossl
-          fi
-
-      - name: Export Certificates
-        env:
-          DOMAIN: ${{ secrets.DOMAIN_NAME }}
-        run: |
-          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
-            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước xuất chứng chỉ."
-          else
-            acme.sh --install-cert -d $DOMAIN \
-              --cert-file ./cert.pem \
-              --key-file ./key.pem \
-              --ca-file ./ca.pem \
-              --fullchain-file ./fullchain.pem
-          fi
-
-      - name: Sign mobileconfig file
-        run: |
-          if [ -f "khoindvn.io.vn.mobileconfig" ]; then
-            echo "Đang sign file mobileconfig..."
-            if [ -f "./ca.pem" ]; then
-              openssl smime -sign \
-                -signer ./cert.pem \
-                -inkey ./key.pem \
-                -certfile ./ca.pem \
-                -nodetach \
-                -outform der \
-                -in khoindvn.io.vn.mobileconfig \
-                -out khoindvn.mobileconfig
-            else
-              openssl smime -sign \
-                -signer ./cert.pem \
-                -inkey ./key.pem \
-                -nodetach \
-                -outform der \
-                -in khoindvn.io.vn.mobileconfig \
-                -out khoindvn.mobileconfig
-            fi
-          else
-            echo "Không tìm thấy file khoindvn.io.vn.mobileconfig"
-            exit 1
-          fi
-
-      - name: Upload Signed Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: signed-mobileconfig
-          path: khoindvn.mobileconfig
-
-      - name: Commit and Push Signed File
-        if: ${{ github.event.inputs.mobileconfig_content == '' || github.event.inputs.mobileconfig_content == null }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add khoindvn.mobileconfig khoindvn.io.vn.mobileconfig
-          # Chỉ commit nếu có sự thay đổi
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto update signed mobileconfig" && git push)
-
-
-      - name: Zip Files and Send to Telegram Bot
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -f "khoindvn.mobileconfig" ]; then
-            echo "Đang nén các file thành ZIP..."
-            zip khoindvn.io.vn_SSL_and_Profile.zip khoindvn.mobileconfig cert.pem key.pem fullchain.pem ca.pem
+        // 1. Xử lý nhận File cấu hình (.mobileconfig) hoặc Chứng chỉ SSL (.pem/.key) gửi từ Telegram
+        if (update.message.document) {
+          const doc = update.message.document;
+          const fileName = doc.file_name || "";
+          const fileNameLower = fileName.toLowerCase();
+          
+          // Trường hợp 1: Người dùng gửi file cấu hình (.mobileconfig) để bắt đầu tiến trình ký
+          if (fileNameLower.endsWith(".mobileconfig")) {
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `⏳ Đang tải và ghi nhận file cấu hình \`${fileName}\` vào bộ nhớ tạm...`);
             
-            # Tạo nội dung tin nhắn có chứa link tải file tĩnh (tự động cập nhật)
-            CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp Profile (Luôn cập nhật bản mới nhất):\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa Profile đã ký và bộ chứng chỉ SSL (cert, key, fullchain).'
+            try {
+              const getFileRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${doc.file_id}`);
+              if (!getFileRes.ok) throw new Error("Không thể gọi Telegram getFile API.");
+              const fileData = await getFileRes.json();
+              const filePath = fileData.result.file_path;
+              if (!filePath) throw new Error("Không lấy được file_path từ Telegram.");
+              
+              const downloadRes = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`);
+              if (!downloadRes.ok) throw new Error("Không thể tải file từ máy chủ Telegram.");
+              
+              const fileContent = await downloadRes.text();
+              
+              // Khởi tạo trạng thái phiên làm việc trong bộ nhớ tạm
+              userStates.set(chatId, {
+                mobileconfig: fileContent,
+                fileName: fileName,
+                step: 'WAITING_FOR_SSL'
+              });
+              
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 
+                `📥 Đã ghi nhận file cấu hình thành công!\n\n` +
+                `🔑 **Bước tiếp theo:** Vui lòng gửi tiếp các file chứng chỉ SSL của bạn (gồm \`cert.pem\`, \`key.pem\`, và \`ca.pem\` nếu có).\n\n` +
+                `⚡ Khi đã gửi đủ các file, bạn chỉ cần gõ lệnh **/sign** để Bot tiến hành ký trực tiếp ngay lập tức!`
+              );
+            } catch (err) {
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `❌ Gặp lỗi trong quá trình xử lý file:\n${err.message}`);
+            }
+            return new Response("OK", { status: 200 });
+          }
+          
+          // Trường hợp 2: Người dùng đang trong tiến trình ký và gửi các file chứng chỉ SSL (.key hoặc .pem)
+          const state = userStates.get(chatId);
+          if (state) {
+            const isKeyFile = fileNameLower === "key.pem" || fileNameLower.endsWith(".key");
+            const isCertFile = fileNameLower === "cert.pem";
+            const isCaFile = fileNameLower === "ca.pem" || fileNameLower === "ca-bundle.pem";
+            const isFullchainFile = fileNameLower === "fullchain.pem";
+            
+            if (isKeyFile || isCertFile || isCaFile || isFullchainFile) {
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `⏳ Đang tải file chứng chỉ \`${fileName}\` vào bộ nhớ tạm...`);
+              
+              try {
+                const getFileRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${doc.file_id}`);
+                if (!getFileRes.ok) throw new Error("Không thể gọi Telegram getFile API.");
+                const fileData = await getFileRes.json();
+                const filePath = fileData.result.file_path;
+                if (!filePath) throw new Error("Không lấy được file_path từ Telegram.");
+                
+                const downloadRes = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`);
+                if (!downloadRes.ok) throw new Error("Không thể tải file từ máy chủ Telegram.");
+                
+                const fileContent = await downloadRes.text();
+                
+                let label = "";
+                if (isKeyFile) {
+                  state.key = fileContent;
+                  label = "🔑 Khóa bí mật (key.pem)";
+                } else if (isCertFile) {
+                  state.cert = fileContent;
+                  label = "📜 Chứng chỉ (cert.pem)";
+                } else if (isCaFile) {
+                  state.ca = fileContent;
+                  label = "🏢 Chứng chỉ trung gian CA (ca.pem)";
+                } else if (isFullchainFile) {
+                  state.fullchain = fileContent;
+                  label = "🔗 Chuỗi chứng chỉ (fullchain.pem)";
+                }
+                
+                // Trả về danh sách checklist trạng thái trực quan
+                let statusList = `📤 Đã nhận thành công: **${label}**\n\n📊 **Trạng thái các file hiện tại:**\n`;
+                statusList += `🔹 File cấu hình: ✅ Đã nhận (${state.fileName})\n`;
+                statusList += `🔹 Khóa key.pem: ${state.key ? '✅ Đã nhận' : '❌ Chưa nhận'}\n`;
+                statusList += `🔹 Chứng chỉ cert.pem: ${state.cert ? '✅ Đã nhận' : '❌ Chưa nhận'}\n`;
+                statusList += `🔹 Chứng chỉ ca.pem (tùy chọn): ${state.ca ? '✅ Đã nhận' : '◽ Chưa nhận'}\n`;
+                statusList += `🔹 Chuỗi fullchain.pem (tùy chọn): ${state.fullchain ? '✅ Đã nhận' : '◽ Chưa nhận'}\n\n`;
+                
+                if (state.key && state.cert) {
+                  statusList += `⚡ **Đã nhận đủ các file bắt buộc!** Bạn có thể gửi tiếp các file tùy chọn nếu có, hoặc gõ lệnh **/sign** để tiến hành ký trực tiếp ngay lập tức!`;
+                } else {
+                  statusList += `💡 Vui lòng gửi tiếp các file chứng chỉ còn thiếu để hoàn tất.`;
+                }
+                
+                await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, statusList);
+              } catch (err) {
+                await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `❌ Gặp lỗi trong quá trình xử lý file:\n${err.message}`);
+              }
+              return new Response("OK", { status: 200 });
+            }
+          }
+          
+          // Định dạng file không hợp lệ hoặc sai thứ tự
+          await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 
+            `⚠️ Định dạng file không hỗ trợ hoặc sai thứ tự tiến trình!\n\n` +
+            `💡 **Quy trình ký trực tiếp siêu nhanh:**\n` +
+            `1️⃣ Gửi file cấu hình \`.mobileconfig\` trước.\n` +
+            `2️⃣ Gửi các file chứng chỉ SSL (\`cert.pem\`, \`key.pem\`, \`ca.pem\`, \`fullchain.pem\` nếu có).\n` +
+            `3️⃣ Gõ lệnh **/sign** để kích hoạt ký trực tiếp!\n\n` +
+            `*(Gõ /clear để hủy tiến trình và reset bộ nhớ tạm nếu muốn làm lại)*`
+          );
+          return new Response("OK", { status: 200 });
+        }
 
-            echo "Đang gửi qua Telegram..."
-            curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \
-                 -F caption="$CAPTION" \
-                 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument?chat_id=${TELEGRAM_CHAT_ID}"
-          else
-            echo "Lỗi: Không tìm thấy file khoindvn.mobileconfig để gửi qua Telegram."
-            exit 1
-          fi
+        // 2. Xử lý các lệnh dạng text từ người dùng
+        if (update.message.text) {
+          const text = update.message.text.trim();
+
+          if (text === "/start" || text === "/help") {
+            const helpMsg = `🤖 **Bot Quản Lý SSL & Profile**\n\n` +
+              `Danh sách lệnh:\n` +
+              `🔹 /renew hoặc /sign - Ép chạy gia hạn SSL và ký Profile ngay lập tức.\n` +
+              `🔹 /link - Lấy nhanh link tải trực tiếp file Profile.\n` +
+              `🔹 /status - Kiểm tra xem hệ thống có đang chạy hay đã lỗi.\n` +
+              `🔹 /ping - Kiểm tra kết nối của Bot.\n` +
+              `🔹 /info - Xem thông tin cấu hình hiện tại.\n` +
+              `🔹 /clear hoặc /cancel - Hủy tiến trình ký và dọn dẹp bộ nhớ tạm.\n` +
+              `🔹 /help - Hiện bảng hướng dẫn này.`;
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, helpMsg);
+          }
+          else if (text === "/clear" || text === "/cancel") {
+            userStates.delete(chatId);
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "🧹 Đã hủy tiến trình ký trực tiếp hiện tại và làm sạch bộ nhớ tạm của Bot thành công!");
+          }
+          else if (text === "/ping") {
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "🏓 Pong! Bot vẫn đang thức và hoạt động rất mượt mà nhé đại ca!");
+          }
+        else if (text === "/info") {
+          const infoMsg = `ℹ️ **Thông tin cấu hình Bot:**\n\n` +
+            `▪️ Kho lưu trữ GitHub: ${env.GITHUB_REPO}\n` +
+            `▪️ Admin Chat ID: ${env.ADMIN_CHAT_ID}\n` +
+            `▪️ Hệ thống: Cloudflare Workers ⚡\n` +
+            `▪️ Trạng thái: Sẵn sàng nhận lệnh 🟢`;
+          await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, infoMsg);
+        }
+        else if (text === "/link") {
+          const linkMsg = `🔗 **Link tải trực tiếp Profile mới nhất:**\n\n` +
+            `https://raw.githubusercontent.com/${env.GITHUB_REPO}/main/khoindvn.mobileconfig`;
+          await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, linkMsg);
+        }
+        else if (text === "/status") {
+          await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "🔍 Đang kiểm tra trạng thái trên GitHub...");
+          const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/runs?per_page=1`, {
+            headers: {
+              "Accept": "application/vnd.github+json",
+              "Authorization": `Bearer ${env.GITHUB_PAT}`,
+              "User-Agent": "Telegram-Bot"
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.workflow_runs && data.workflow_runs.length > 0) {
+              const run = data.workflow_runs[0];
+              const conclusion = run.conclusion === "success" ? "✅ Thành công" : (run.conclusion === "failure" ? "❌ Lỗi" : (run.conclusion || "Đang chạy ⏳"));
+              const statusMsg = `📊 **Trạng thái lần chạy gần nhất:**\n\n` +
+                `Trạng thái: ${run.status}\n` +
+                `Kết quả: ${conclusion}\n` +
+                `Lúc: ${new Date(run.updated_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}\n` +
+                `Xem log chi tiết: ${run.html_url}`;
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, statusMsg);
+            } else {
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Chưa có lịch sử chạy nào trên GitHub.");
+            }
+          } else {
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "❌ Lỗi không thể lấy dữ liệu từ GitHub. Vui lòng kiểm tra GITHUB_PAT.");
+          }
+        }
+        else if (text === "/renew" || text === "/sign") {
+          const state = userStates.get(chatId);
+          if (state) {
+            // Kiểm tra xem đã đủ 2 file bắt buộc chưa (key và cert)
+            if (!state.key || !state.cert) {
+              let missing = [];
+              if (!state.key) missing.push("Khóa bí mật (key.pem)");
+              if (!state.cert) missing.push("Chứng chỉ (cert.pem)");
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `⚠️ Tiến trình ký chưa đủ file! Còn thiếu: ${missing.join(", ")}. Vui lòng gửi nốt để bắt đầu ký!`);
+            } else {
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `⚡ Đang gửi dữ liệu ký trực tiếp sang GitHub Actions (Không lưu/commit bất kỳ file nào lên GitHub)...`);
+              
+              const result = await triggerGithubWorkflow(env, {
+                mobileconfig_content: state.mobileconfig,
+                cert_content: state.cert,
+                key_content: state.key,
+                ca_content: state.ca || "",
+                fullchain_content: state.fullchain || ""
+              });
+              
+              // Xóa sạch trạng thái phiên làm việc
+              userStates.delete(chatId);
+              
+              if (result.ok) {
+                await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `✅ Đã gửi lệnh ký trực tiếp thành công!\n\n▪️ Workflow: ${result.workflow}\n▪️ Nhánh: ${result.branch}\n\nBot sẽ tự động gửi file ZIP chứa Profile đã ký và bộ chứng chỉ mới khi hoàn tất (khoảng 1-2 phút).`);
+              } else {
+                await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `❌ Không thể kích hoạt ký tự động.\nHTTP Status: ${result.status}\nChi tiết: ${result.message}`);
+              }
+            }
+          } else {
+            // Chạy chế độ tự động mặc định (Renew ZeroSSL và push lên GitHub)
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "⏳ Đang đánh thức GitHub Actions để tạo SSL và ký Profile (Chế độ tự động, sẽ cập nhật đè file lên GitHub)...");
+            const result = await triggerGithubWorkflow(env);
+            if (result.ok) {
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `✅ Đã tự động phát hiện cấu hình và kích hoạt thành công!\n\n▪️ Workflow: ${result.workflow}\n▪️ Nhánh: ${result.branch}\n\nBot sẽ tự động gửi file ZIP khi chạy xong (khoảng 1-2 phút).\n\nGõ /status để xem tiến trình.`);
+            } else {
+              let guide = "";
+              if (result.status === 401) {
+                guide = "🔑 Mã lỗi 401 (Unauthorized): Token `GITHUB_PAT` của bạn không chính xác hoặc đã hết hạn.";
+              } else if (result.status === 403) {
+                guide = "🚫 Mã lỗi 403 (Forbidden): Token `GITHUB_PAT` thiếu quyền ghi (`workflow` scope đối với Classic Token, hoặc `Actions: Read and Write` đối với Fine-grained Token).";
+              } else if (result.status === 404) {
+                guide = "🔍 Mã lỗi 404 (Not Found): Không tìm thấy repo hoặc workflow. Hãy kiểm tra:\n1. Tên repo `GITHUB_REPO` đã đúng định dạng `username/repo` chưa (ví dụ: `owner/repo`).\n2. Token có quyền truy cập repo này không.\n3. File workflow `.github/workflows/sign_mobileconfig.yml` đã được push lên nhánh `main` chưa.";
+              } else if (result.status === 422) {
+                guide = "⚠️ Mã lỗi 422 (Unprocessable): Nhánh `main` không tồn tại hoặc workflow đang bị tắt (disabled) trên GitHub.";
+              } else {
+                guide = "⚙️ Hãy kiểm tra lại cấu hình GITHUB_PAT và GITHUB_REPO trong phần biến môi trường (Environment Variables) của Cloudflare Worker.";
+              }
+              
+              const errMsg = `❌ **Lỗi kích hoạt GitHub Actions!**\n\n` +
+                `▪️ HTTP Status: ${result.status}\n` +
+                `▪️ Chi tiết: ${result.message}\n\n` +
+                `💡 **Gợi ý khắc phục:**\n${guide}`;
+              await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, errMsg);
+            }
+          }
+        }
+        else {
+          await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, "❓ Lệnh không hợp lệ. Gõ /help để xem danh sách lệnh.");
+        }
+      }
+    }
+      return new Response("OK", { status: 200 });
+    } catch (e) {
+      return new Response(e.message, { status: 500 });
+    }
+  },
+
+  // Lập lịch tự động bằng Cloudflare Cron Triggers
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      (async () => {
+        console.log("Kích hoạt gia hạn SSL tự động từ Cloudflare Cron Trigger...");
+        const result = await triggerGithubWorkflow(env);
+        if (env.ADMIN_CHAT_ID && env.TELEGRAM_BOT_TOKEN) {
+          if (result.ok) {
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, env.ADMIN_CHAT_ID, "⏰ [Cloudflare Cron] Đã tự động kích hoạt tiến trình làm mới SSL & ký Profile định kỳ thành công!");
+          } else {
+            await sendMessage(env.TELEGRAM_BOT_TOKEN, env.ADMIN_CHAT_ID, `⚠️ [Cloudflare Cron] Lỗi: Tự động kích hoạt làm mới SSL định kỳ thất bại.\nHTTP Status: ${result.status}\nChi tiết: ${result.message}`);
+          }
+        }
+      })()
+    );
+  }
+};
+
+// Hàm gọi sang GitHub API để trigger workflow
+async function triggerGithubWorkflow(env, inputs = null) {
+  const workflows = ["sign_mobileconfig.yml", "main.yml"];
+  const branches = ["main", "master"];
+  let lastResult = null;
+
+  for (const workflow of workflows) {
+    for (const branch of branches) {
+      try {
+        console.log(`Trying to trigger ${workflow} on branch ${branch}...`);
+        
+        const requestBody = { ref: branch };
+        if (inputs) {
+          requestBody.inputs = inputs;
+        }
+        
+        const githubRes = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+          method: "POST",
+          headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${env.GITHUB_PAT}`,
+            "User-Agent": "Telegram-Bot-Cloudflare-Worker"
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        if (githubRes.ok) {
+          console.log(`Successfully triggered ${workflow} on branch ${branch}!`);
+          return { ok: true, workflow, branch };
+        }
+        
+        const errText = await githubRes.text();
+        let errMsg = errText;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.message || errText;
+        } catch (_) {}
+        
+        lastResult = { ok: false, status: githubRes.status, message: errMsg, workflow, branch };
+        
+        // Nếu lỗi KHÔNG PHẢI 404 (ví dụ 401 hết hạn token, 403 thiếu quyền) thì dừng ngay lập tức vì đổi nhánh hay đổi file cũng sẽ lỗi y như vậy
+        if (githubRes.status !== 404) {
+          return lastResult;
+        }
+      } catch (e) {
+        console.error(`Error triggering ${workflow} on branch ${branch}:`, e);
+        lastResult = { ok: false, status: "FETCH_ERROR", message: e.message, workflow, branch };
+      }
+    }
+  }
+  
+  return lastResult;
+}
+
+// Hàm gửi tin nhắn qua Telegram
+async function sendMessage(botToken, chatId, text) {
+  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: text })
+  });
+}
+
+// Hàm upload/commit file đè lên GitHub bằng API
+async function uploadToGithub(env, path, contentText) {
+  const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${path}`;
+  const headers = {
+    "Accept": "application/vnd.github+json",
+    "Authorization": `Bearer ${env.GITHUB_PAT}`,
+    "User-Agent": "Telegram-Bot-Cloudflare-Worker"
+  };
+  
+  let sha = null;
+  // Bước 1: Lấy mã blob SHA của file cũ (bắt buộc để ghi đè file trên GitHub)
+  try {
+    const getRes = await fetch(url, { headers });
+    if (getRes.ok) {
+      const data = await getRes.json();
+      sha = data.sha;
+    }
+  } catch (e) {
+    console.error("Error fetching file SHA:", e);
+  }
+  
+  // Bước 2: Mã hóa file sang Base64 chuẩn UTF-8 tương thích Cloudflare Workers
+  const base64Content = btoa(unescape(encodeURIComponent(contentText)));
+  
+  // Bước 3: Đẩy file mới ghi đè lên GitHub
+  const body = {
+    message: "chore: upload new mobileconfig source via Telegram Bot",
+    content: base64Content
+  };
+  if (sha) {
+    body.sha = sha;
+  }
+  
+  const putRes = await fetch(url, {
+    method: "PUT",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  
+  if (putRes.ok) {
+    return { success: true };
+  } else {
+    const errText = await putRes.text();
+    return { success: false, message: errText };
+  }
+}

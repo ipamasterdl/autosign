@@ -22,8 +22,14 @@ jobs:
           cat << 'EOF' > randomize.py
           import re
           import uuid
+          import os
 
-          with open('khoindvn.io.vn.mobileconfig', 'r', encoding='utf-8') as f:
+          file_name = 'khoindvn.io.vn.mobileconfig'
+          if not os.path.exists(file_name):
+              print(f"Lỗi: Không tìm thấy file {file_name}")
+              exit(1)
+
+          with open(file_name, 'r', encoding='utf-8') as f:
               content = f.read()
 
           # Tìm tất cả các UUID (định dạng chuẩn 8-4-4-4-12) trong file
@@ -49,10 +55,10 @@ jobs:
 
           content = uuid_pattern.sub(replace_uuid, content)
 
-          with open('khoindvn.io.vn.mobileconfig', 'w', encoding='utf-8') as f:
+          with open(file_name, 'w', encoding='utf-8') as f:
               f.write(content)
 
-          print(f"Đã tự động tìm thấy và ngẫu nhiên hóa đồng bộ {len(found_uuids)} UUID/ID thành công!")
+          print(f"Đã tự động tìm thấy và ngẫu nhiên hóa đồng bộ {len(found_uuids)} UUID/ID trong {file_name} thành công!")
           EOF
           python randomize.py
           rm randomize.py
@@ -86,7 +92,7 @@ jobs:
       - name: Sign mobileconfig file
         run: |
           if [ -f "khoindvn.io.vn.mobileconfig" ]; then
-            echo "Đang sign file mobileconfig..."
+            echo "Đang ký file mobileconfig..."
             if [ -f "./ca.pem" ]; then
               openssl smime -sign \
                 -signer ./cert.pem \
@@ -106,7 +112,7 @@ jobs:
                 -out khoindvn.mobileconfig
             fi
           else
-            echo "Không tìm thấy file khoindvn.io.vn.mobileconfig"
+            echo "Lỗi: Không tìm thấy file khoindvn.io.vn.mobileconfig"
             exit 1
           fi
 
@@ -124,24 +130,21 @@ jobs:
           # Chỉ commit nếu có sự thay đổi
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto update signed mobileconfig" && git push)
 
-
-      - name: Zip Files and Send to Telegram Bot
+      - name: Zip File and Send to Telegram Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          echo "Đang nén các file thành ZIP..."
+          zip -j khoindvn.io.vn_SSL_and_Profile.zip cert.pem key.pem fullchain.pem ca.pem || true
+          
           if [ -f "khoindvn.mobileconfig" ]; then
-            echo "Đang nén các file thành ZIP..."
-            zip khoindvn.io.vn_SSL_and_Profile.zip khoindvn.mobileconfig cert.pem key.pem fullchain.pem ca.pem
-            
-            # Tạo nội dung tin nhắn có chứa link tải file tĩnh (tự động cập nhật)
-            CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp Profile (Luôn cập nhật bản mới nhất):\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa Profile đã ký và bộ chứng chỉ SSL (cert, key, fullchain).'
-
-            echo "Đang gửi qua Telegram..."
-            curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \
-                 -F caption="$CAPTION" \
-                 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument?chat_id=${TELEGRAM_CHAT_ID}"
-          else
-            echo "Lỗi: Không tìm thấy file khoindvn.mobileconfig để gửi qua Telegram."
-            exit 1
+            zip -j khoindvn.io.vn_SSL_and_Profile.zip khoindvn.mobileconfig -u || true
           fi
+          
+          CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp:\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa bản Profile đã ký và bộ chứng chỉ SSL.'
+
+          echo "Đang gửi qua Telegram..."
+          curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \
+               -F caption="$CAPTION" \
+               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument?chat_id=${TELEGRAM_CHAT_ID}"

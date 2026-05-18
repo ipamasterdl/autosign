@@ -7,27 +7,6 @@ on:
     paths:
       - 'khoindvn.io.vn.mobileconfig'
   workflow_dispatch:
-    inputs:
-      mobileconfig_content:
-        description: 'Nội dung file mobileconfig gốc gửi từ Telegram'
-        required: false
-        default: ''
-      cert_content:
-        description: 'Nội dung file cert.pem gửi từ Telegram'
-        required: false
-        default: ''
-      key_content:
-        description: 'Nội dung file key.pem gửi từ Telegram'
-        required: false
-        default: ''
-      ca_content:
-        description: 'Nội dung file ca.pem gửi từ Telegram'
-        required: false
-        default: ''
-      fullchain_content:
-        description: 'Nội dung file fullchain.pem gửi từ Telegram'
-        required: false
-        default: ''
 
 jobs:
   sign-mobileconfig:
@@ -38,31 +17,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Write mobileconfig and SSL content from inputs if provided
-        run: |
-          if [ -n "${{ github.event.inputs.mobileconfig_content }}" ]; then
-            echo "${{ github.event.inputs.mobileconfig_content }}" > khoindvn.io.vn.mobileconfig
-            echo "Đã ghi nhận file mobileconfig từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.cert_content }}" ]; then
-            echo "${{ github.event.inputs.cert_content }}" > cert.pem
-            echo "Đã ghi nhận file cert.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.key_content }}" ]; then
-            echo "${{ github.event.inputs.key_content }}" > key.pem
-            echo "Đã ghi nhận file key.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.ca_content }}" ]; then
-            echo "${{ github.event.inputs.ca_content }}" > ca.pem
-            echo "Đã ghi nhận file ca.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-          if [ -n "${{ github.event.inputs.fullchain_content }}" ]; then
-            echo "${{ github.event.inputs.fullchain_content }}" > fullchain.pem
-            echo "Đã ghi nhận file fullchain.pem từ Telegram input. Sẽ không commit lên GitHub."
-          fi
-
       - name: Randomize UUIDs and Identifiers for Auto-Renew Flow
-        if: ${{ github.event.inputs.mobileconfig_content == '' || github.event.inputs.mobileconfig_content == null }}
         run: |
           cat << 'EOF' > randomize.py
           import re
@@ -71,35 +26,33 @@ jobs:
           with open('khoindvn.io.vn.mobileconfig', 'r', encoding='utf-8') as f:
               content = f.read()
 
-          # 1. Randomize all PayloadUUID tags
-          content = re.sub(
-              r'<key>PayloadUUID</key>\s*<string>([^<]+)</string>',
-              lambda m: f'<key>PayloadUUID</key>\n\t\t<string>{str(uuid.uuid4()).upper()}</string>',
-              content
-          )
+          # Tìm tất cả các UUID (định dạng chuẩn 8-4-4-4-12) trong file
+          uuid_pattern = re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+          found_uuids = set(uuid_pattern.findall(content))
 
-          # 2. Randomize the main unique identifier UUID
-          old_base_uuid = '307b1b04-6727-46d7-a431-1f6f4acfbda6'
-          new_base_uuid = str(uuid.uuid4()).lower()
-          content = content.replace(old_base_uuid, new_base_uuid)
+          # Ánh xạ mỗi UUID cũ thành một UUID mới duy nhất và đồng bộ
+          uuid_map = {}
+          for old_uuid in found_uuids:
+              new_val = str(uuid.uuid4())
+              # Giữ nguyên kiểu chữ hoa/thường ban đầu của UUID để tương thích Apple Profile
+              if old_uuid.isupper():
+                  uuid_map[old_uuid] = new_val.upper()
+              elif old_uuid.islower():
+                  uuid_map[old_uuid] = new_val.lower()
+              else:
+                  uuid_map[old_uuid] = new_val
 
-          # 3. Randomize other child payload identifier UUIDs
-          content = re.sub(
-              r'<key>PayloadIdentifier</key>\s*<string>com\.apple\.dnsSettings\.managed\.[^<]+</string>',
-              lambda m: f'<key>PayloadIdentifier</key>\n\t\t\t<string>com.apple.dnsSettings.managed.{str(uuid.uuid4()).lower()}</string>',
-              content
-          )
+          # Thay thế đồng bộ tất cả các UUID trên toàn bộ file (cả PayloadUUID và PayloadIdentifier)
+          def replace_uuid(match):
+              val = match.group(0)
+              return uuid_map.get(val, val)
 
-          content = re.sub(
-              r'<key>PayloadIdentifier</key>\s*<string>com\.apple\.webClip\.managed\.[^<]+</string>',
-              lambda m: f'<key>PayloadIdentifier</key>\n\t\t\t<string>com.apple.webClip.managed.{str(uuid.uuid4()).upper()}</string>',
-              content
-          )
+          content = uuid_pattern.sub(replace_uuid, content)
 
           with open('khoindvn.io.vn.mobileconfig', 'w', encoding='utf-8') as f:
               f.write(content)
 
-          print("Đã tự động làm mới và ngẫu nhiên hóa toàn bộ UUID & PayloadIdentifier thành công!")
+          print(f"Đã tự động tìm thấy và ngẫu nhiên hóa đồng bộ {len(found_uuids)} UUID/ID thành công!")
           EOF
           python randomize.py
           rm randomize.py
@@ -115,28 +68,20 @@ jobs:
           CF_Account_ID: ${{ secrets.CF_ACCOUNT_ID }}
           DOMAIN: ${{ secrets.DOMAIN_NAME }}
         run: |
-          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
-            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước cấp phát tự động."
-          else
-            # Đăng ký tài khoản acme.sh với email (cần thiết cho ZeroSSL)
-            acme.sh --register-account -m admin@$DOMAIN --server zerossl
-            # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
-            acme.sh --issue --dns dns_cf -d $DOMAIN --server zerossl
-          fi
+          # Đăng ký tài khoản acme.sh với email (cần thiết cho ZeroSSL)
+          acme.sh --register-account -m admin@$DOMAIN --server zerossl
+          # Yêu cầu cấp phát chứng chỉ SSL qua DNS-01 challenge
+          acme.sh --issue --dns dns_cf -d $DOMAIN --server zerossl
 
       - name: Export Certificates
         env:
           DOMAIN: ${{ secrets.DOMAIN_NAME }}
         run: |
-          if [ -f "./cert.pem" ] && [ -f "./key.pem" ]; then
-            echo "Đã tìm thấy chứng chỉ SSL tùy chỉnh. Bỏ qua bước xuất chứng chỉ."
-          else
-            acme.sh --install-cert -d $DOMAIN \
-              --cert-file ./cert.pem \
-              --key-file ./key.pem \
-              --ca-file ./ca.pem \
-              --fullchain-file ./fullchain.pem
-          fi
+          acme.sh --install-cert -d $DOMAIN \
+            --cert-file ./cert.pem \
+            --key-file ./key.pem \
+            --ca-file ./ca.pem \
+            --fullchain-file ./fullchain.pem
 
       - name: Sign mobileconfig file
         run: |
@@ -172,7 +117,6 @@ jobs:
           path: khoindvn.mobileconfig
 
       - name: Commit and Push Signed File
-        if: ${{ github.event.inputs.mobileconfig_content == '' || github.event.inputs.mobileconfig_content == null }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"

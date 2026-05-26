@@ -144,11 +144,11 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ github.run_number }}"
-          name: "Release v${{ github.run_number }} - SSL & Profile"
+          tag_name: "latest"
+          name: "Latest Signed Profile & SSL"
           body: |
             🎉 Đã gia hạn SSL và ký Profile thành công!
-            📅 Lần chạy thứ: ${{ github.run_number }}
+            📅 Cập nhật lần cuối: ${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
           draft: false
           prerelease: false
           files: |
@@ -162,7 +162,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải từ GitHub Releases:\n${{ steps.create_release.outputs.html_url }}\n\n🔗 Link tải trực tiếp Profile:\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa bản Profile đã ký và bộ chứng chỉ SSL.'
+          CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp cố định (Luôn là bản mới nhất):\nhttps://github.com/${{ github.repository }}/releases/download/latest/khoindvn.mobileconfig\n\n🔗 Link trang Releases:\n${{ steps.create_release.outputs.html_url }}\n\n📦 Kèm theo là file ZIP chứa bản Profile đã ký và bộ chứng chỉ SSL.'
 
           echo "Đang gửi qua Telegram..."
           curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \

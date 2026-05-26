@@ -11,6 +11,8 @@ on:
 jobs:
   sign-mobileconfig:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -130,19 +132,37 @@ jobs:
           # Chỉ commit nếu có sự thay đổi
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto update signed mobileconfig" && git push)
 
-      - name: Zip File and Send to Telegram Bot
+      - name: Zip Files for SSL and Profile
+        run: |
+          echo "Đang nén các file thành ZIP..."
+          zip -j khoindvn.io.vn_SSL_and_Profile.zip cert.pem key.pem fullchain.pem ca.pem || true
+          if [ -f "khoindvn.mobileconfig" ]; then
+            zip -j khoindvn.io.vn_SSL_and_Profile.zip khoindvn.mobileconfig -u || true
+          fi
+
+      - name: Upload to GitHub Releases
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ github.run_number }}"
+          name: "Release v${{ github.run_number }} - SSL & Profile"
+          body: |
+            🎉 Đã gia hạn SSL và ký Profile thành công!
+            📅 Lần chạy thứ: ${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: |
+            khoindvn.mobileconfig
+            khoindvn.io.vn_SSL_and_Profile.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send to Telegram Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          echo "Đang nén các file thành ZIP..."
-          zip -j khoindvn.io.vn_SSL_and_Profile.zip cert.pem key.pem fullchain.pem ca.pem || true
-          
-          if [ -f "khoindvn.mobileconfig" ]; then
-            zip -j khoindvn.io.vn_SSL_and_Profile.zip khoindvn.mobileconfig -u || true
-          fi
-          
-          CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải trực tiếp:\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa bản Profile đã ký và bộ chứng chỉ SSL.'
+          CAPTION=$'✅ Đã gia hạn SSL và ký Profile thành công!\n\n🔗 Link tải từ GitHub Releases:\n${{ steps.create_release.outputs.html_url }}\n\n🔗 Link tải trực tiếp Profile:\nhttps://raw.githubusercontent.com/${{ github.repository }}/main/khoindvn.mobileconfig\n\n📦 Kèm theo là file ZIP chứa bản Profile đã ký và bộ chứng chỉ SSL.'
 
           echo "Đang gửi qua Telegram..."
           curl -F document=@"khoindvn.io.vn_SSL_and_Profile.zip" \

@@ -52,13 +52,13 @@
 			<key>PayloadDisplayName</key>
 			<string>Anti Revoke</string>
 			<key>PayloadIdentifier</key>
-			<string>com.apple.dnsSettings.managed.3acc3df6-0cc1-442b-aa4b-dc9112d398b8</string>
+			<string>com.apple.dnsSettings.managed.f2f9a004-6b7b-4d2a-b6c2-f0ebd3016651</string>
 			<key>PayloadOrganization</key>
 			<string>khơindvn</string>
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
-		<string>7D66DC54-61D0-497A-BEF2-7FFA1BE39B17</string>
+		<string>0DCAA2B0-181E-4AF7-8265-69FF24E4C4BA</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -197,13 +197,13 @@
 			<key>PayloadDisplayName</key>
 			<string>Bio Khoindvn</string>
 			<key>PayloadIdentifier</key>
-			<string>com.apple.webClip.managed.56179553-0E3D-41C2-A8E3-4E380902A23F</string>
+			<string>com.apple.webClip.managed.EF523A21-99CF-4496-AA99-4F49387361DB</string>
 			<key>PayloadOrganization</key>
 			<string>khoindvn</string>
 			<key>PayloadType</key>
 			<string>com.apple.webClip.managed</string>
 			<key>PayloadUUID</key>
-		<string>C316DCFA-6944-4AFF-B07B-EFE816220362</string>
+		<string>97935BFB-DD94-4880-9052-1C7054469996</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>Precomposed</key>
@@ -223,7 +223,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.applicationaccess</string>
 			<key>PayloadUUID</key>
-		<string>FECF644E-BEFD-4955-8F3B-054732AD220A</string>
+		<string>2F6CC238-4FFB-4F00-8833-4B41101DBAA6</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -231,11 +231,11 @@
 	<key>PayloadDisplayName</key>
 	<string>khơindvn</string>
 	<key>PayloadIdentifier</key>
-	<string>com.khoindvn.apple-dns.ad5ef377-7770-4d07-beb1-e5add6b344a7</string>
+	<string>com.khoindvn.apple-dns.288ad343-f53d-43d6-98fc-3e84b20c74c8</string>
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-		<string>456E7102-79FA-4395-BC5E-50307FC057BD</string>
+		<string>E983FE0E-C653-48E0-BC4A-95C34D490D74</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>
